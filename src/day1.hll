@@ -1,0 +1,35 @@
+Constants:
+  int N := 10;
+
+Declarations:
+  int depth[N];
+  int window[N-2];
+  int answer1;
+  int answer2;
+
+Definitions:
+  depth := {
+    199,
+    200,
+    208,
+    210,
+    200,
+    207,
+    240,
+    269,
+    260,
+    263
+  };
+
+  window[i] := depth[i] + depth[i+1] + depth[i+2];
+
+  answer1 := SUM i:[1, N-1] (if depth[i] > depth[i-1] then 1 else 0);
+  answer2 := SUM i:[1, N-3] (if window[i] > window[i-1] then 1 else 0);
+
+Outputs:
+  answer1;
+  answer2;
+
+Proof Obligations:
+  answer1 = 7;
+  answer2 = 5;
