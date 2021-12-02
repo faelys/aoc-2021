@@ -1,0 +1,45 @@
+Constants:
+  int N := 6;
+
+Types:
+  enum { forward, up, down } direction;
+  struct { dir: direction, val: int } command;
+
+Declarations:
+  command cmd[N];
+  int position[N+1];
+  int depth[N+1];
+  int aim[N+1];
+
+Definitions:
+  //  s/^\([^ ]*\) \([^ ]*\)$/    { \1, \2 },/
+  cmd := {
+    { forward, 5 },
+    { down, 5 },
+    { forward, 8 },
+    { up, 3 },
+    { down, 8 },
+    { forward, 2 }
+  };
+
+  aim[i] := (if i = 0 then 0 else aim[i-1] + (cmd[i-1].dir
+                                             |forward => 0
+                                             |up      => -cmd[i-1].val
+                                             |down    => cmd[i-1].val));
+  position[i] := (if i = 0 then 0
+                  else position[i-1] + (cmd[i-1].dir
+                                       |forward => cmd[i-1].val
+                                       |up      => 0
+                                       |down    => 0));
+  depth[i] := (if i = 0 then 0
+               else depth[i-1] + (cmd[i-1].dir
+                                 |forward => cmd[i-1].val * aim[i]
+                                 |up      => 0
+                                 |down    => 0));
+
+Outputs:
+  position[N] * depth[N];
+
+Proof Obligations:
+  position[N] = 15;
+  depth[N] = 60;
