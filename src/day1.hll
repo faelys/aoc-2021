@@ -25,6 +25,11 @@ Declarations:
 
 Definitions:
   depth := {
+    /*
+     * Input data for the problem, the general example is given below.
+     * User-specific input data can be pasted there instead, adding commas
+     * at the end of lines.
+     */
     199,
     200,
     208,
@@ -45,6 +50,13 @@ Definitions:
 Outputs:
   answer1;
   answer2;
+
+/*
+ * This problem is static, so the expander performs all the computations
+ * and replaces the answer variables with constants and the POs with TRUE.
+ * Answer values are the most easily retrieved using the commnds `$out 1`
+ * and `$out 2` of the `why` tool, i.e. `why -hll day1.hll`.
+ */
 
 Proof Obligations:
   answer1 = 7;

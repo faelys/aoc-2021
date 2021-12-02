@@ -28,8 +28,12 @@ Declarations:
   int aim[N+1];
 
 Definitions:
-  //  s/^\([^ ]*\) \([^ ]*\)$/    { \1, \2 },/
   cmd := {
+    /*
+     * Input data for the problem, the general example is given below.
+     * User-specific input data can be pasted there instead, adding the
+     * required formatting, e.g. s/^\([^ ]*\) \([^ ]*\)$/    { \1, \2 },/
+     */
     { forward, 5 },
     { down, 5 },
     { forward, 8 },
@@ -55,6 +59,13 @@ Definitions:
 
 Outputs:
   position[N] * depth[N];
+
+/*
+ * This problem is static, so the expander performs all the computations
+ * and replaces the answer variable with a constant and the POs with TRUE.
+ * Answer values are the most easily retrieved using the commnd `$out 1`
+ * of the `why` tool, i.e. `why -hll day2b.hll`.
+ */
 
 Proof Obligations:
   position[N] = 15;
