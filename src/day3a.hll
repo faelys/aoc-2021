@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * This is a dynamic solution to the first puzzle of the day.
+ * Unfortunately the second puzzle requires an overview of the data
+ * and doesn't seem to be easily translated into an online algorithm.
+ * I tried anyway, re-injecting the final one_is_most_common as a new input,
+ * but I couldn't resolve the following algorithmic hurdles.
+ * So both puzzles will be included in the "spacial" rewrite in day3b.hll.
+ *
+ * This solution can still be run using similar commands to day2b-dyn.hll:
+ * expand1 -hll day3a.hll -lll day3a.lll -dumpMap day3a.map -noSanityAnalysis
+ * ./day3-input.sh $(wc -l day3-input.txt) <day3-input.txt >day3a.cex
+ * cex_simulator -hll day3a.hll -map day3a.map -cex day3a.cex -res day3a.res -O
+ */
+
+Constants:
+  int N := 12;
+
+Inputs:
+  bool end_of_report;
+  bool report_bits[N];
+
+Declarations:
+  int unsigned 10 one_counts[N];
+  int unsigned 10 total;
+  bool one_is_most_common[N];
+  int gamma_rate;
+  int espilon_rate;
+
+Definitions:
+  total := 0, total + 1;
+  one_counts[i] := 0, one_counts[i] + (if report_bits[i] then 1 else 0);
+  one_is_most_common[i] := one_counts[i] > (total - one_counts[i]);
+
+  /* The report is big-endian, while the array is little endian */
+  gamma_rate := SUM i:[0,N-1] (if one_is_most_common[i]
+                               then (1 << (N-1 - i)) else 0);
+  espilon_rate := SUM i:[0,N-1] (if one_is_most_common[i]
+                                 then 0 else (1 << (N-1 - i)));
+
+Outputs:
+  gamma_rate * espilon_rate;
+
+Proof Obligations:
+  ~end_of_report;

@@ -1,0 +1,148 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The second puzzle is too difficult to implement temporally, so this
+ * is a rewrite of both puzzles using spatial data.
+ *
+ * The first puzzle is static, and the solution can be found directly
+ * using the why tool, i.e. `why -hll day3b.hll` and the command `$out 1`.
+ *
+ * The second puzzle implements the loop over the temporal steps,
+ * the solution can be found using the why tool by itself, and checking
+ * various depths (for the reference input data, `$depth 6` is enough).
+ *
+ * The correct depth can be found automatically using s3 tools and the
+ * provided PO, which holds as long as there are iterations to perform.
+ * This is done using the following commands:
+ * expand1 -hll day3b.hll -lll day3b.lll -dumpMap day3b.map
+ * s3 -lll day3b.lll -cex day3b.cex -analyse all join in 1 group -bmc
+ * cex_simulator -hll day3b.hll -map day3b.map -cex day3b.cex -res day3b.res -O
+ *
+ * Note that the sanity should be valid, and can be checked with
+ * s3 -lll day3b.lll -cex day3b.cex -analyse 1 -sanity -analyse 2 -bmc
+ * but it seems with user-specific data the problem is too large to prove
+ * comfortably. The command above looks for a counter-example on any PO,
+ * so as long as PO 1 (sanity) is still indeterminate when the PO 2 (puzzle)
+ * is falsified, the counter-example is sane.
+ */
+
+Constants:
+  int N := 5;   /* Number of bits per line, 12 for user-specific data */
+  int L := 12;  /* Number of lines in the port, 1000 for user-specific data */
+
+Declarations:
+  /* First Puzzle */
+
+  int report[L][N];
+  int one_count[N];
+  int zero_count[N];
+  int most_common[N];
+  int least_common[N];
+  int gamma_rate;
+  int epsilon_rate;
+
+  /* Second Puzzle */
+
+  int [0,N] t;
+  bool use_line_M[L];
+  int line_count_M;
+  int one_count_M[N];
+  int zero_count_M[N];
+  int most_common_M[N];
+  int [-1, L] oxygen_generator_rating_index;
+  int oxygen_generator_rating;
+  bool use_line_L[L];
+  int line_count_L;
+  int one_count_L[N];
+  int zero_count_L[N];
+  int least_common_L[N];
+  int [-1, L] co2_scrubber_rating_index;
+  int co2_scrubber_rating;
+
+Definitions:
+  report := {
+    /*
+     * The data set below was imported by filtering AoC input through
+     * sed 's/[0-9]/&, /g;s/, $/ },/;s/^/    { /;$s/,$//'
+     */
+    { 0, 0, 1, 0, 0 },
+    { 1, 1, 1, 1, 0 },
+    { 1, 0, 1, 1, 0 },
+    { 1, 0, 1, 1, 1 },
+    { 1, 0, 1, 0, 1 },
+    { 0, 1, 1, 1, 1 },
+    { 0, 0, 1, 1, 1 },
+    { 1, 1, 1, 0, 0 },
+    { 1, 0, 0, 0, 0 },
+    { 1, 1, 0, 0, 1 },
+    { 0, 0, 0, 1, 0 },
+    { 0, 1, 0, 1, 0 }
+  };
+
+  /* First Puzzle */
+
+  one_count[i] := SUM l:[0,L-1] (report[l][i]);
+  zero_count[i] := L - one_count[i];
+  most_common[i] := (if one_count[i] > zero_count[i] then 1 else 0);
+  least_common[i] := (if one_count[i] < zero_count[i] then 1 else 0);
+  gamma_rate := SUM i:[0,N-1] (most_common[i] << (N-1 - i));
+  epsilon_rate := SUM i:[0,N-1] (least_common[i] << (N-1 - i));
+
+  /* Second Puzzle */
+
+  t := 0, t + 1;
+
+  line_count_M := SUM l:[0,L-1] (if use_line_M[l] then 1 else 0);
+  one_count_M[i] := SUM l:[0,L-1] (if use_line_M[l] then report[l][i] else 0);
+  zero_count_M[i] := line_count_M - one_count_M[i];
+  most_common_M[i] := (if one_count_M[i] >= zero_count_M[i] then 1 else 0);
+  use_line_M[l] := true, use_line_M[l] & (report[l][t] = most_common_M[t]);
+
+  oxygen_generator_rating_index := -1,
+   (if oxygen_generator_rating_index > 0
+    then oxygen_generator_rating_index
+    else (if line_count_M = 1
+          then (SELECT l:[0,L-1] (use_line_M[l]))
+          else -1));
+  oxygen_generator_rating :=
+   (if oxygen_generator_rating_index > 0
+    then SUM i:[0,N-1] (report[oxygen_generator_rating_index][i] << (N-1 - i))
+    else -1);
+
+  line_count_L := SUM l:[0,L-1] (if use_line_L[l] then 1 else 0);
+  one_count_L[i] := SUM l:[0,L-1] (if use_line_L[l] then report[l][i] else 0);
+  zero_count_L[i] := line_count_L - one_count_L[i];
+  least_common_L[i] := (if one_count_L[i] >= zero_count_L[i] then 0 else 1);
+  use_line_L[l] := true, use_line_L[l] & (report[l][t] = least_common_L[t]);
+
+  co2_scrubber_rating_index := -1,
+   (if co2_scrubber_rating_index > 0
+    then co2_scrubber_rating_index
+    else (if line_count_L = 1
+          then (SELECT l:[0,L-1] (use_line_L[l]))
+          else -1));
+  co2_scrubber_rating :=
+   (if co2_scrubber_rating_index > 0
+    then SUM i:[0,N-1] (report[co2_scrubber_rating_index][i] << (N-1 - i))
+    else -1);
+
+Outputs:
+  gamma_rate * epsilon_rate;
+  oxygen_generator_rating * co2_scrubber_rating;
+
+Proof Obligations:
+  oxygen_generator_rating_index = -1 # co2_scrubber_rating_index = -1;
