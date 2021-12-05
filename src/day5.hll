@@ -1,0 +1,214 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * This is the first day where I had serious problems with my tool choice.
+ * I thought I would first encounter issues with expressing the puzzle
+ * in HLL (e.g. string manipulation), so I was a bit surprised to hit
+ * performance issue when scaling from the reference inputs to user-specific
+ * inputs.
+ *
+ * My first attempt probably caused too much memoization, reaching quickly
+ * terabytes of allocation and swapping as if there were no tomorrow.
+ *
+ * In my second attempt I inlined everything, hoping to reach the smallest
+ * possible expansion. It might have ended up in too little memoization,
+ * staying well below 200MB but running for almost 26 minutes.
+ *
+ * I have no idea what made my third attempt work in ~3:30 in the why tool
+ * for both puzzles together, I got the idea of turning horizontal axis into
+ * time when debugging the grid.
+ *
+ * I tried going for a single cell per time step, but that didn't go well
+ * either (44 minutes), I guess the optimum is spreading the load over
+ * time and space.
+ */
+
+Constants:
+  /* Reference input sizes */
+  int N := 10;   /* Number of lines */
+  int W := 10;   /* Width of the grid */
+  int H := 10;   /* Height of the grid */
+/*
+  /* User-specific input sizes */
+  int N := 500;  /* Number of lines */
+  int W := 1000; /* Width of the grid */
+  int H := 1000; /* Height of the grid */
+*/
+
+Types:
+  struct { x1: int, y1: int, x2: int, y2: int } line;
+
+Declarations:
+  line lines[N];
+
+/* Used by failed attempts
+  bool line_selected_1(int);
+  bool in_line_1(int, int, int);
+  int grid_1[W, H];
+  int answer_1;
+  int[0, W-1] debug_col_1;
+  int debug_grid_cols_1[H];
+*/
+
+  bool horizontal[N];
+  bool vertical[N];
+  int[0, W] x;
+  int[0, N] grid_col_1[H];
+  int[0, H*W] acc_1;
+  int answer_1;
+
+  bool diagonal[N];
+  int[0, N] grid_col_2[H];
+  int[0, H*W] acc_2;
+  int answer_2;
+
+/* Used by one-cell-per-time-step attempt
+  int[0, H] y;
+  int grid_cell_1;
+  int[0, H*W] acc_1;
+  int answer_1;
+  int grid_cell_2;
+  int[0, H*W] acc_2;
+  int answer_2;
+*/
+
+Definitions:
+  /* Puzzle inputs */
+  lines := {
+    /*
+     * The data set below was imported by filtering AoC input through
+     * sed 's/ ->/,/;s/^/    { /;s/$/ },/;$s/,$//'
+     */
+    { 0,9, 5,9 },
+    { 8,0, 0,8 },
+    { 9,4, 3,4 },
+    { 2,2, 2,1 },
+    { 7,0, 7,4 },
+    { 6,4, 2,0 },
+    { 0,9, 2,9 },
+    { 3,4, 1,4 },
+    { 0,0, 8,8 },
+    { 5,5, 8,2 }
+  };
+
+/* First failed attemp at first puzzle
+  line_selected_1(i) := lines[i].x1 = lines[i].x2 # lines[i].y1 = lines[i].y2;
+  in_line_1(n, x, y) := line_selected_1(n)
+                        & x:[$min(lines[n].x1, lines[n].x2),
+                             $max(lines[n].x1, lines[n].x2)]
+                        & y:[$min(lines[n].y1, lines[n].y2),
+                             $max(lines[n].y1, lines[n].y2)];
+  grid_1[x, y] := SUM n:[0, N-1] (if in_line_1(n, x, y) then 1 else 0);
+  answer_1 := SUM x:[0, W-1], y:[0, H-1] (if grid_1[x, y] >= 2 then 1 else 0);
+
+  /* grid_1 visualization over time in the why tool */
+  debug_col_1 := 0, (debug_col_1 + 1) % W;
+  debug_grid_cols_1[y] := grid_1[debug_col_1, y];
+*/
+
+/* Second failed attempt at first puzzle
+  answer_1 := SUM x:[0, W-1], y:[0, H-1]
+                (if (SUM n:[0, N-1]
+                       (if (lines[n].x1 = lines[n].x2
+                            & lines[n].x1 = x
+                            & y:[$min(lines[n].y1, lines[n].y2),
+                                 $max(lines[n].y1, lines[n].y2)])
+                         # (lines[n].y1 = lines[n].y2
+                            & lines[n].y1 = y
+                            & x:[$min(lines[n].x1, lines[n].x2),
+                                 $max(lines[n].x1, lines[n].x2)])
+                        then 1 else 0))
+                    >= 2
+                 then 1 else 0);
+  /* 1548,90s user 0,36s system 99% cpu 25:49,32 total */
+*/
+
+  /* First Puzzle */
+
+  horizontal[n] := lines[n].y1 = lines[n].y2;
+  vertical[n] := lines[n].x1 = lines[n].x2;
+  x := 0, (x + 1) % W;
+  grid_col_1[y] := SUM n:[0, N-1]
+                    (if (vertical[n] & x = lines[n].x1
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)])
+                      # (horizontal[n] & y = lines[n].y1
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)])
+                     then 1 else 0);
+  answer_1 := SUM y:[0, H-1] (if grid_col_1[y] >= 2 then 1 else 0) + acc_1;
+  acc_1 := 0, answer_1;
+
+  /* Second Puzzle */
+
+  diagonal[n] := $abs(lines[n].x2 - lines[n].x1)
+               = $abs(lines[n].y2 - lines[n].y1);
+  grid_col_2[y] := SUM n:[0, N-1]
+                    (if (vertical[n] & x = lines[n].x1
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)])
+                      # (horizontal[n] & y = lines[n].y1
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)])
+                      # (diagonal[n]
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)]
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)]
+                          & $abs(lines[n].x1 - x) = $abs(lines[n].y1 - y))
+                     then 1 else 0);
+  answer_2 := SUM y:[0, H-1] (if grid_col_2[y] >= 2 then 1 else 0) + acc_2;
+  acc_2 := 0, answer_2;
+
+  /* Attempt with one cell per time step */
+
+/*
+  y := 0, if x > 0 then y else (y + 1) % H;
+  grid_cell_1 := SUM n:[0, N-1]
+                    (if (vertical[n] & x = lines[n].x1
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)])
+                      # (horizontal[n] & y = lines[n].y1
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)])
+                     then 1 else 0);
+  answer_1 := (if grid_cell_1 >= 2 then 1 else 0) + acc_1;
+
+  grid_cell_2 := SUM n:[0, N-1]
+                    (if (vertical[n] & x = lines[n].x1
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)])
+                      # (horizontal[n] & y = lines[n].y1
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)])
+                      # (diagonal[n]
+                          & x:[$min(lines[n].x1, lines[n].x2),
+                               $max(lines[n].x1, lines[n].x2)]
+                          & y:[$min(lines[n].y1, lines[n].y2),
+                               $max(lines[n].y1, lines[n].y2)]
+                          & $abs(lines[n].x1 - x) = $abs(lines[n].y1 - y))
+                     then 1 else 0);
+  answer_2 := (if grid_cell_2 >= 2 then 1 else 0) + acc_2;
+  acc_2 := 0, answer_2;
+*/
+
+Outputs:
+  answer_1;
+  answer_2;
+
+Proof Obligations:
+  ALL n:[0, N-1] (horizontal[n] # vertical[n] # diagonal[n]);
