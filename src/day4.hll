@@ -35,6 +35,18 @@
  * using `$depth 27` or `$depth 100` (the same value as T), and find the time
  * manually by looking for the first value which is not -1 in `$out 1` and
  * `$out 2` (for the first and second puzzle, respectively).
+ *
+ * Note that time management here and in day3b.hll is not very good, because
+ * I update the state directly in the next of memories, but then the
+ * combinational streams which use the memories are one step late, which leads
+ * to awkward situations like having to use `draw[t-1]` in answer variables
+ * or having to store the index of last winning grid. It would probably be
+ * better to use something like:
+ *   marked[n][x, y] := grids[n][x, y] = drawn_number # prev_marked[n][x, y];
+ *   prev_marked[n][x, y] := false, marked[n][x, y];
+ * or even using a `pre` expression, depending on whether the winning draw is
+ * detected using a dedicated memory or comparing prev_marked and marked.
+ * I'm leaving it as it is to make it a lesson for myself and others.
  */
 
 Constants:
