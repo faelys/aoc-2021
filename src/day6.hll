@@ -1,0 +1,87 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The puzzles today naturally use the time intrinsic to HLL. My first draft
+ * use a state for each fish, but that doesn't scale at all. Since each fish
+ * is fully determined by its single-integer state, I'm using population
+ * counts instead.
+ *
+ * The puzzles today only differ by the amount of time spent, so the same HLL
+ * can be used. I used the why tool directly (`why -hll day6.hll`) and look
+ * at the output at various depths (`$depth 18` or `$depth 80` or `$depth 256`,
+ * followed by `$out 1`).
+ * I had to experiment with the upper bound (`max_N`) until there was no
+ * overflow at the desired depth.
+ */
+
+Constants:
+  /* Puzzle size for reference values */
+  int max_N := 6000;  /* Maximum number of fish */
+  int init_N := 5;    /* Initial number of fish */
+
+/*
+  /* Puzzle size for user-specific values */
+  int max_N := 1000000000000;  /* Maximum number of fish */
+  int init_N := 300;           /* Initial number of fish */
+*/
+
+Declarations:
+  int init_state[init_N];
+
+  /* Discareded naive implementation
+  int[-1,8] state[max_N];
+  int nof_fish;
+  int nof_new_fish;
+  */
+
+  int[0,max_N] nof_fish_per_state[9];
+  int nof_fish;
+
+Definitions:
+  /* Puzzle Input */
+  init_state := {
+    /* Direct copy of AoC input */
+    3,4,3,1,2
+  };
+
+  /* Naive Implementation of First Puzzle */
+
+  /*
+  nof_fish := SUM i:[0, max_N-1] (if state[i] >= 0 then 1 else 0);
+  nof_new_fish_:= SUM i:[0, max_N-1] (if state[i] = 0 then 1 else 0);
+
+  I(state[i]) := if i < init_N then init_state[i] else -1;
+  X(state[i]) := if i < nof_fish
+                 then (if state[i] = 0 then 6 else state[i] - 1)
+                 else if i < nof_fish + nof_new_fish then 8 else -1;
+  */
+
+  /* Both Puzzles */
+
+  I(nof_fish_per_state[i]) := SUM j:[0, init_N-1]
+                                (if init_state[j] = i then 1 else 0);
+  X(nof_fish_per_state[i]) := if i = 8 then nof_fish_per_state[0]
+                              else if i = 6 then nof_fish_per_state[0]
+                                               + nof_fish_per_state[7]
+                                            else nof_fish_per_state[i + 1];
+  nof_fish := SUM i:[0,8] (nof_fish_per_state[i]);
+
+Outputs:
+  nof_fish;
+
+Proof Obligations:
+  //ALL i:[0, max_N-1] ((state[i] >= 0) = (i < nof_fish));
