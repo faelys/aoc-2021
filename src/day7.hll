@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The puzzles today are straightforward to write in HLL thanks to
+ * quantifiers.
+ * The only trick I used was to replace the specified `SUM i:[1,d] (i)`
+ * with the well-known `d * (d + 1) / 2`; it doesn't change much thanks to
+ * memoization, I made the replacement without thinking about it (I got it
+ * wrong on the first draft).
+ *
+ * These solution are fully static, so they can be computed using the `why`
+ * tool directly (`why -hll day7.hll`) and displayed using `$out 1`
+ * and `$out 2`.
+ */
+
+Constants:
+  /* Puzzle size for reference values */
+  int N := 10;
+  int max_X := 16;
+
+  /* Puzzle size for user-specific values
+  int N := 1000;
+  int max_X := 2000;
+  */
+
+Declarations:
+  int crab_X[N];
+  int fuel_cost_1[max_X+1];
+  int fuel_cost_2[max_X+1];
+  int dist_cost_2(int);
+
+Definitions:
+  crab_X := {
+    /* Direct copy of AoC input */
+    16,1,2,0,4,2,7,1,2,14
+  };
+
+  fuel_cost_1[x] := SUM n:[0, N-1] ($abs(crab_X[n] - x));
+
+  dist_cost_2(d) := d * (d + 1) / 2;
+  fuel_cost_2[x] := SUM n:[0, N-1] (dist_cost_2($abs(crab_X[n] - x)));
+
+Outputs:
+  $min x:[0, max_X] (fuel_cost_1[x]);
+  $min x:[0, max_X] (fuel_cost_2[x]);
