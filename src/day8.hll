@@ -63,6 +63,7 @@ Declarations:
   int answer_1;
   int answer_2;
 
+  int nof_seg[10];
 
 Definitions:
   pattern := {
@@ -259,6 +260,10 @@ Definitions:
 
   answer_2 := SUM n:[0,N-1], i:[10,13] (digit(n,i) * 10^(13-i));
 
+  /* Addendum */
+
+  nof_seg[d] := SUM i:[0,6] (if pattern[d][i] then 1 else 0);
+
 Outputs:
   answer_1;
   answer_2;
@@ -281,3 +286,65 @@ Constraints:
 Proof Obligations:
   permutations = perm_chk;
   FALSE;
+
+  /*
+   * What if I didn't have a solver?
+   *
+   * I still thought about how to solve the puzzles algorithmically,
+   * and I tried to come up with a way to rebuild the permutations.
+   * The solver can prove that my reasoning is sound: the sanity of
+   * SELECT proves that the definition matches exactly one index,
+   * and only using previously-computed indices proves the definition
+   * is independent from the permutation.
+   */
+
+  /* Upper horizontal segment is in the 3-segment digit but not in the
+   * 2-segment digit.
+   */
+  SELECT i:[0,6] (pattern[SELECT d:[0,9] (nof_seg[d] = 3)][i]
+               & ~pattern[SELECT d:[0,9] (nof_seg[d] = 2)][i])
+  = 0;
+
+  /* The middle horizontal segment is the only one common to all
+   * 4- and 5-segment digits.
+   */
+  SELECT i:[0,6] (ALL d:[0,9] (nof_seg[d]:[4, 5] -> pattern[d][i]))
+  = 3;
+
+  /* The upper right vertical segment is in the 2-segment digit but not
+   * in one of the 6-segment digits.
+   */
+  SELECT i:[0,6] (pattern[SELECT d:[0,9] (nof_seg[d] = 2)][i]
+               & SOME d:[0,9] (nof_seg[d] = 6 & ~pattern[d][i]))
+  = 2;
+
+  /* The upper left vertical segment is in the 4-segment digit but not
+   * in the 2-segment digit and it is not the middle horizontal segment.
+   */
+  SELECT i:[0,6] (pattern[SELECT d:[0,9] (nof_seg[d] = 4)][i]
+               & ~pattern[SELECT d:[0,9] (nof_seg[d] = 2)][i]
+               & i != 3)
+  = 1;
+
+  /* The lower right vertical segment is in the 2-segment digit but
+   * it is not the upper right vertical segment.
+   */
+  SELECT i:[0,6] (pattern[SELECT d:[0,9] (nof_seg[d] = 2)][i]
+               & i != 2)
+  = 5;
+
+  /* The lower horizontal segment is in all 5-segment digits and
+   * it neither the middle nor the upper horizontal segment.
+   */
+  SELECT i:[0,6] (ALL d:[0,9] (nof_seg[d] = 5 -> pattern[d][i])
+                & i != 0 & i != 3)
+  = 6;
+
+  /* The lower left vertical segment is the remaining one,
+   * and it is also the only segment to appear in only one 5-segment digit
+   * and which is not the upper left vertical segment.
+   */
+  SELECT i:[0,6] (SUM d:[0,9] (if nof_seg[d] = 5 & pattern[d][i] then 1 else 0)
+                    = 1
+                  & i != 1)
+  = 4;
