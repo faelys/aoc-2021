@@ -1,0 +1,174 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The most difficult points in the puzzles today are guessing correctly
+ * various sizes (stack depth, number of incorrect or incomplete lines,
+ * score bounds, etc) because conservative bounds are too large and make
+ * the tools way too slow, and thinking through vaccine-booster-induced
+ * fever (debugging giant stack automatons is no fun even clear-headed
+ * though).
+ *
+ * This is my second attempt, in the first try I went with one automaton per
+ * line in parallel, and one time step per column, but it was difficult to
+ * make it work, and I gave up on trying to sort the scores on the second
+ * puzzles.
+ *
+ * Here there is only one automaton and one character per time step, with
+ * a special line-ending input. That makes 10950 time steps in my inputs,
+ * and the conversion script needed 8 minutes to build the counter-example.
+ * However the why tool has no issue handling it, even though it would be
+ * much more comfortable to have an option to display only part of the time
+ * steps.
+ *
+ * The steps to replay this solution is:
+ * ./day10b-input.sh $(wc -l <day10-input.txt) <day10-input.txt >day10b.cex
+ * expand1 -hll day10b.hll -lll day10b.lll -dumpMap day10b.map
+ * why -hll day10b.hll -map day10b.map -cex day10b.cex
+ *   $noexplain
+ *   answer_1
+ *   answer_2
+ */
+
+Constants:
+  /* Puzzle sizes for all inputs */
+  int D := 20;
+  int N := 60;
+
+Types:
+  sort { open_brace, open_bracket, open_paren, less_than } < input_open;
+  sort { close_brace, close_bracket, close_paren, greater_than } < input_close;
+  sort { end } < input_end;
+  sort input_open, input_close, input_end < input_char;
+
+  enum { running, incorrect } parser_state;
+
+Inputs:
+  input_char read_char;
+
+Declarations:
+  parser_state cur_state;
+  parser_state next_state;
+  input_char stack[D];
+  bool pop;
+  input_char pushed;
+  input_char match(input_char);
+  int[0, 10^6] prev_score;
+  int cur_score;
+  int answer_1;
+
+  int[0,200] line_number;
+  int[0, D-1] stack_depth;
+  int[0, D-1] max_stack_depth;
+
+  int[0, 10^12] prev_incomplete_scores[N];
+  int incomplete_scores[N];
+  int[0, N-1] nof_incomplete_scores;
+  int answer_2;
+
+Definitions:
+
+  /* Stack automaton to parse the input */
+
+  match(c) := (c
+              | open_brace => close_brace
+              | open_bracket => close_bracket
+              | open_paren => close_paren
+              | less_than => greater_than
+              | close_brace => open_brace
+              | close_bracket => open_bracket
+              | close_paren => open_paren
+              | greater_than => less_than
+              | _ => end);
+
+  next_state := if read_char = end then running
+                else if cur_state = incorrect then incorrect
+                     else (if read_char:input_open # stack[0] = read_char
+                           then running
+                           else incorrect);
+
+  cur_state := running, next_state;
+
+  pop := cur_state = running
+        & read_char:input_close
+        & stack[0] = read_char;
+
+  pushed
+    := if cur_state != running then end
+       else (if read_char:input_open then match(read_char) else end);
+
+  I(stack[i]) := end;
+  X(stack[i]) := if read_char = end then end
+                 else (if pushed != end
+                       then (if i = 0 then pushed else stack[i-1])
+                       else (if ~pop then stack[i]
+                             else (if i < D-1 then stack[i+1] else end)));
+
+  /* First Problem */
+
+  cur_score := if cur_state = running & next_state = incorrect
+                then (read_char
+                      | close_paren => 3
+                      | close_bracket => 57
+                      | close_brace => 1197
+                      | greater_than => 25137
+                      | _ => 0)
+                else 0;
+
+  prev_score := 0, answer_1;
+  answer_1 := prev_score + cur_score;
+
+  /* Debug streams */
+
+  stack_depth := 0, if read_char = end then 0
+                    else stack_depth + (if pushed != end then 1 else 0)
+                                     - (if pop then 1 else 0);
+  max_stack_depth := 0, $max(stack_depth, max_stack_depth);
+
+  line_number := 1, line_number + (if read_char = end then 1 else 0);
+
+  /* Second Problem */
+
+  cur_incomplete_score
+    := if cur_state = running & read_char = end & stack[0] != end
+       then SUM d:[0, D-1] (if d < stack_depth
+                            then (stack[d]
+                                 |close_paren => 1
+                                 |close_bracket => 2
+                                 |close_brace => 3
+                                 |greater_than => 4
+                                 |_ => 0)
+                                * 5^(stack_depth - 1 - d)
+                            else 0)
+       else 0;
+
+  incomplete_scores[n]
+    := if prev_incomplete_scores[n] >= cur_incomplete_score
+       then prev_incomplete_scores[n]
+       else if n = 0 # prev_incomplete_scores[n-1] >= cur_incomplete_score
+            then cur_incomplete_score
+            else prev_incomplete_scores[n-1];
+
+  prev_incomplete_scores[n] := 0, incomplete_scores[n];
+
+  nof_incomplete_scores
+    := SUM n:[0, N-1] (if incomplete_scores[n] > 0 then 1 else 0);
+
+  answer_2 := if nof_incomplete_scores = 0 then 0
+              else incomplete_scores[(nof_incomplete_scores - 1) / 2];
+
+Proof Obligations:
+  ALL n:[1, N-1] (incomplete_scores[n-1] >= incomplete_scores[n]);
