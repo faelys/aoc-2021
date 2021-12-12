@@ -1,0 +1,163 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * For the first time I wondered whether I had finally encountered the
+ * first puzzle I wouldn't be able to do in HLL. Holding the status of
+ * all cave sequences quickly takes massive amounts of memory, there is no
+ * way do destroy or unallocate incorrect paths, and the correctness criteria
+ * is too complex to generate a list of correct paths.
+ *
+ * At first I started encoding cave sequences into numbers, using a stack
+ * automaton to iterate over paths from the starting point, counting those
+ * which can reach the ending point. That worked for the smallest inputs,
+ * but then I encountered arithmetic overflow on the largest reference input.
+ *
+ * The trick is that there is actually no need to store the paths, only the
+ * current position and the visited caves are needed, and that's how it's
+ * solved here.
+ *
+ * There are again hard-to-guess bounds, which are checked using sanity and
+ * the first PO, while the second PO is falsified when the answer is ready.
+ * Just like yesterday and for the same reason, s3-core doesn't have a
+ * useful strategy to figure out the relevant depths, and the depths are
+ * even worse today than yesterday (the second puzzle on my user-specific data
+ * is solved at depth 322424, which isn't many iterations for a usual language
+ * but that's already huge for HLL tools).
+ * So I had to use the why tool with `why -hll day12.hll`, try a more-or-less
+ * random depth, check that the stack didn't overflow (using `max_stack_use`
+ * or `$po 1`), and whether the depth is large enough (using `$po 2`), and
+ * try another depth or display the answers.
+ *
+ * In future automaton I will probably take more take to ensure that errors
+ * (like stack overflow) and termination are trap-states, so that large
+ * jumps in depth don't risk hiding an error and outputting incorrect results.
+ */
+
+Constants:
+  int max_stack_size := 40;
+
+Declarations:
+  cave stack_pos[max_stack_size];
+  bool stack_visited[max_stack_size][nof_caves];
+  int stack_size;
+  int[0, max_stack_size] max_stack_use;
+  bool is_valid_extension[nof_caves];
+  int move_rank[nof_caves];
+  int pushed_count;
+  int pushed_cave(int);
+  int[0, 10^5] valid_paths_seen_1;
+  int answer_1;
+  bool stack_double[max_stack_size];
+  int[0, 10^6] valid_paths_seen_2;
+  int answer_2;
+
+Definitions:
+
+  stack_size := SUM i:[0, max_stack_size-1]
+                  (if stack_pos[i] != end then 1 else 0);
+  max_stack_use := 0, $max(max_stack_use, stack_size);
+
+  move_rank[i] := if is_valid_extension[i]
+                  then SUM j:cave (if j < i & is_valid_extension[j]
+                                   then 1 else 0)
+                  else -1;
+
+  pushed_count := SUM i:cave (if move_rank[i] >= 0 then 1 else 0);
+  pushed_cave(i) := SELECT j:cave (move_rank[j] = i);
+
+  I(stack_pos[i]) := if i = 0 then start else end;
+  X(stack_pos[i]) := if i < pushed_count
+                     then pushed_cave(i)
+                     else if i < pushed_count + stack_size - 1
+                          then stack_pos[i - pushed_count + 1]
+                          else end;
+
+  I(stack_visited[i][j]) := false;
+  X(stack_visited[i][j]) := if i < pushed_count
+                            then stack_visited[0][j] # (j = pushed_cave(i))
+                            else if i < pushed_count + stack_size - 1
+                                 then stack_visited[i - pushed_count + 1][j]
+                                 else false;
+
+  /* First Puzzle */
+
+  /* Traversal engine when solving only the first puzzle:
+  is_valid_extension[i] := stack_size > 0
+                           & i != start & i != end
+                           & has_edge(stack_pos[0], i)
+                           & (is_big(i) # ~stack_visited[0][i]);
+  */
+
+  valid_paths_seen_1 := 0, answer_1;
+  answer_1 := valid_paths_seen_1
+            + (if has_edge(stack_pos[0], end) & ~stack_double[0] then 1 else 0);
+
+  /* Second Puzzle */
+
+  /* Traversal engine when solving both puzzles: */
+  is_valid_extension[i] := stack_size > 0
+                           & i != start & i != end
+                           & has_edge(stack_pos[0], i)
+                           & (is_big(i)
+                              # ~stack_visited[0][i]
+                              # ~stack_double[0]);
+
+  I(stack_double[i]) := false;
+  X(stack_double[i]) := if i < pushed_count
+                        then stack_double[0]
+                             # (~is_big(pushed_cave(i))
+                                & stack_visited[0][pushed_cave(i)])
+                        else if i < pushed_count + stack_size - 1
+                             then stack_double[i - pushed_count + 1]
+                             else false;
+
+  valid_paths_seen_2 := 0, answer_2;
+  answer_2 := valid_paths_seen_2
+            + (if has_edge(stack_pos[0], end) then 1 else 0);
+
+
+Proof Obligations:
+  stack_size + pushed_count < max_stack_size;
+  stack_size > 0;
+
+/* HLL input generated by calling ./day12-input.sh day12-input.txt */
+Constants:
+  int nof_caves := 6;
+  int A := 0;
+  int b := 1;
+  int c := 2;
+  int d := 3;
+  int start := 4;
+  int end := 5;
+
+Types:
+  int[0, nof_caves-1] cave;
+
+Declarations:
+  bool is_big(cave);
+  bool has_edge(cave, cave);
+
+Definitions:
+  is_big := { TRUE, false, false, false, false, false };
+  has_edge(e1, e2) := False
+    # (e1 = start & e2 = A) # (e1 = A & e2 = start)
+    # (e1 = start & e2 = b) # (e1 = b & e2 = start)
+    # (e1 = A & e2 = c) # (e1 = c & e2 = A)
+    # (e1 = A & e2 = b) # (e1 = b & e2 = A)
+    # (e1 = b & e2 = d) # (e1 = d & e2 = b)
+    # (e1 = A & e2 = end) # (e1 = end & e2 = A)
+    # (e1 = b & e2 = end) # (e1 = end & e2 = b);
