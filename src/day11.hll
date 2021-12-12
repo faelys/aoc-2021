@@ -33,7 +33,9 @@
  * relevant output.
  * However BMC is not a good strategy because it duplicates the problem graph
  * for each time step, making it quite big and slow after a few hundreds of
- * time steps, while the answers requires thousands.
+ * time steps, while the answers requires thousands. (I tried it anyway,
+ * and the 672 steps of the first puzzle took 50 minutes and the 1192 steps
+ * of the second puzzle took 156 minutes).
  * In contrast, the why tool considers only one step at a time, updating the
  * inputs and memories as needed, so it can quickly compute thousands of
  * time steps.
