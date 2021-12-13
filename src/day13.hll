@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The first puzzle today is straightforward, and the second one is an
+ * interesting exercice of data visualization. The why tool dispalys arrays
+ * with one element per line, and the values over time one after the other.
+ * A boolean array is the most compact representation (two characters per time
+ * step) and the values are colored, so a bitmap can be displayed as ASCII art
+ * by having a boolean array "column" scan horizontally over time.
+ *
+ * The first puzzle can be answered using:
+ *   why -hll day13.hll
+ *   $noexplain
+ *   $depth 1
+ *   unique_nodes;
+ * The second puzzle needs a relatively wide terminal:
+ *   why -hll day13.hll
+ *   $noexplain
+ *   $depth 100
+ *   column;
+ */
+
+Constants:
+  int nof_visible_rows := 10;
+
+Declarations:
+  int[0, 100] t;
+  int[0, 1500] dots[nof_dots][2];
+  int next_dots[nof_dots][2];
+  bool overlap[nof_dots];
+  int unique_nodes;
+  bool column[nof_visible_rows];
+
+Definitions:
+  t := 0, t + 1;
+
+  dots := init_dots, next_dots;
+  overlap[i] := i > 0 & SOME j:[0, nof_dots-1] (j < i & dots[i] = dots[j]);
+
+  next_dots[i] := { if t < nof_folds
+                       & folds[t].dir = along_x & dots[i][0] > folds[t].coord
+                    then 2 * folds[t].coord - dots[i][0]
+                    else dots[i][0],
+                    if t < nof_folds
+                       & folds[t].dir = along_y & dots[i][1] > folds[t].coord
+                    then 2 * folds[t].coord - dots[i][1]
+                    else dots[i][1] };
+
+  /* First Puzzle */
+
+  unique_nodes := SUM i:[0, nof_dots-1] (if overlap[i] then 0 else 1);
+
+  /* Second Puzzle */
+  column[y] := (t = 0 & y = 0)
+             # (t >= nof_folds
+                & SOME i:[0, nof_dots-1] (dots[i][0] = t - nof_folds
+                                        & dots[i][1] = y - 1));
+
+
+/* Input generated using ./day13-input.sh day13-input.txt */
+Constants:
+  int nof_dots := 18;
+  int nof_folds := 2;
+
+Types:
+  enum { along_x, along_y } fold_direction;
+  struct { dir:fold_direction, coord: int } fold_instruction;
+
+Declarations:
+  int init_dots[nof_dots][2];
+  fold_instruction folds[nof_folds];
+
+Definitions:
+  init_dots := {
+    { 6,10 },
+    { 0,14 },
+    { 9,10 },
+    { 0,3 },
+    { 10,4 },
+    { 4,11 },
+    { 6,0 },
+    { 6,12 },
+    { 4,1 },
+    { 0,13 },
+    { 10,12 },
+    { 3,4 },
+    { 3,0 },
+    { 8,4 },
+    { 1,10 },
+    { 2,14 },
+    { 8,10 },
+    { 9,0 }
+  };
+  folds := {
+    { along_y, 7 },
+    { along_x, 5 }
+  };
