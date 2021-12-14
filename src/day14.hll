@@ -1,0 +1,123 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * This is another puzzle in which there are too many things to keep around
+ * within reasonable memory limits, so the trick is keep around counts of
+ * identical things.
+ *
+ * With the exponential growth over time, the first puzzle is easy to keep
+ * whole in memory, so that the rewrite for the second puzzle can be checked
+ * against the naive implementation for the first puzzle.
+ *
+ * The constant max_steps is the number of steps in the naive implementation,
+ * keeping it to 10 solvers the first puzzle, while being bearably slow even
+ * on user-specific input, so that the correctness of the second implementation
+ * can be checked using all 3 POs. It can then be lowered to quickly use the
+ * second implementation to get answers.
+ *
+ * This HLL file can be used directly in the why tool, using `$noexplain` to
+ * display results more quickly, `$depth` to reach the desired depth, and
+ * `answer_1` or `answer_2` to display the puzzle answers.
+ */
+
+Constants:
+  int max_steps := 10; /* Lower it to 2 to make user-specific solving fast */
+  int max_size := init_size * 2^max_steps;
+  int max_abstract_size := 10^16;
+
+Declarations:
+  element string[max_size];
+  int[0, max_abstract_size] cur_size;
+  int next_size;
+  int counts(element);
+  int answer_1;
+
+  int[0, 10^14] pair_count(element, element);
+  int counts_2(element);
+  int answer_2;
+
+Definitions:
+  next_size := cur_size * 2 - 1;
+  cur_size := init_size, next_size;
+
+  I(string[i]) := if i < init_size then init_string[i] else H;
+  X(string[i]) := if i >= next_size then H
+                  else if i % 2 = 0 then string[i / 2]
+                       else table(string[i / 2], string[i / 2 + 1]);
+
+  counts(e) := SUM i:[0, max_size]
+                 (if i < cur_size & string[i] = e then 1 else 0);
+  answer_1 := $max e:element (counts(e)) - $min e:element (counts(e));
+
+
+  /* xy pairs are created by ey (with "ey -> x") and xf (with "xf -> y") */
+  pair_count(x, y) := SUM i:[0, init_size - 2] (if init_string[i] = x
+                                                 & init_string[i + 1] = y
+                                                then 1 else 0),
+                      SUM e:element (if table(e, y) = x
+                                     then pair_count(e, y)
+                                     else 0)
+                    + SUM f:element (if table(x, f) = y
+                                     then pair_count(x, f)
+                                     else 0);
+
+  counts_2(e) := SUM f:element (pair_count(e, f))
+                 + (if init_string[init_size - 1] = e then 1 else 0);
+  answer_2 := $max e:element (counts_2(e)) - $min e:element (counts_2(e));
+
+Proof Obligations:
+  SUM x:element, y:element (pair_count(x, y)) = cur_size - 1;
+
+  cur_size > max_size
+    # ALL x:element, y:element
+        (pair_count(x, y)
+         = SUM i:[0, max_size - 2]
+             (if i + 1 < cur_size & string[i] = x & string[i + 1] = y
+              then 1 else 0));
+
+  cur_size > max_size # ALL e:element (counts(e) = counts_2(e));
+
+/* Input generated using ./day14-input.sh day14-input.txt */
+Constants:
+  int init_size := 5 - 1;
+
+Types:
+  enum { B, C, H, N } element;
+
+Declarations:
+  element init_string[init_size];
+  element table(element, element);
+
+Definitions:
+  init_string := { N, N, C, B };
+  table(x, y) := ( x, y
+                 | C, H => B
+                 | H, H => N
+                 | C, B => H
+                 | N, H => C
+                 | H, B => C
+                 | H, C => B
+                 | H, N => C
+                 | N, N => C
+                 | B, H => H
+                 | N, C => B
+                 | N, B => B
+                 | B, N => B
+                 | B, B => N
+                 | B, C => B
+                 | C, C => N
+                 | C, N => C);
