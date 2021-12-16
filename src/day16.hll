@@ -1,0 +1,240 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * Another day, another stack automaton... I get to dust my counter-example
+ * building script, and the bitstream is used as input. I guess it's not
+ * that easy, considering the amount of time I spent in debugging the
+ * automaton execution.
+ *
+ * I'm sure what I exactly did wrong, but it took a lot of time and memory
+ * to execute, to the point that cex_simulator turned easier to use than
+ * the why tool.
+ *
+ * Sample use:
+ * ./day16-input.sh $(wc -c <day16-input.txt) <day16-input.txt >day16.cex
+ * expand1 -hll day16.hll -lll day16.ll -dumpMap day16.map
+ * cex_simulator -hll day16.hll -map day16.map -cex day16.cex -res day16.res -O
+ */
+
+Constants:
+  int stack_size := 30;
+  int max_val := 2^48 - 1;
+  int max_size := 63;
+
+  int op_sum := 0;
+  int op_prod := 1;
+  int op_min := 2;
+  int op_max := 3;
+  int op_lit := 4;
+  int op_greater := 5;
+  int op_less := 6;
+  int op_equal := 7;
+
+Types:
+  enum {
+    stop, read_version, read_type,
+    read_lit, read_lit_middle, read_lit_end,
+    read_sub, read_sub_bits, read_sub_packets
+  } states;
+
+Inputs:
+  bool data;
+  bool end;
+
+Declarations:
+  states state_stack[stack_size];
+  int[-3, max_val] size_stack[stack_size];
+  int updated_size[stack_size];
+  states cur_state;
+  states next_state;
+  int[0, max_val] prev_val;
+  int cur_val;
+  int[0, max_size] bits_to_read;
+  int[0, max_size] prev_packet_size;
+  int packet_size;
+  bool cur_val_complete;
+  int pop;
+  int[0, max_val] answer_1;
+
+  int[-1,7] cur_op;
+  int[0,7] op_stack[stack_size];
+  int[-2, max_val] val_stack[stack_size];
+  int updated_values[stack_size];
+  int new_top_value;
+  int[0, max_val]partial_lit_value;
+  int lit_value;
+  int eval(int, int, int);
+
+  bool error;
+
+Definitions:
+  cur_val_complete := bits_to_read = 1;
+  cur_val := prev_val * 2 + (if data then  1 else 0);
+  prev_val := 0, if cur_val_complete then 0 else cur_val;
+
+  I(bits_to_read) := 3;
+  X(bits_to_read) := if ~cur_val_complete then bits_to_read - 1
+                     else (next_state
+                          |stop => 1
+                          |read_version => 3
+                          |read_type => 3
+                          |read_lit => 1
+                          |read_lit_middle => 4
+                          |read_lit_end => 4
+                          |read_sub => 1
+                          |read_sub_bits => 15
+                          |read_sub_packets => 11);
+
+  cur_state := read_version, next_state;
+  next_state := if end then stop
+                else if ~cur_val_complete then cur_state
+                else (cur_state
+                     |stop => stop
+                     |read_version => read_type
+                     |read_type => if cur_val = 4 then read_lit else read_sub
+                     |read_lit => if cur_val = 1 then read_lit_middle
+                                                 else read_lit_end
+                     |read_lit_middle => read_lit
+                     |read_lit_end => read_version
+                     |read_sub => if cur_val = 1 then read_sub_packets
+                                                 else read_sub_bits
+                     |read_sub_bits => read_version
+                     |read_sub_packets => read_version);
+
+  packet_finished := cur_val_complete & next_state = read_version;
+  prev_packet_size := 0, if packet_finished then 0 else packet_size;
+  packet_size := prev_packet_size + 1;
+
+  push := if cur_val_complete & cur_state = read_sub then next_state else stop;
+  pop := SELECT i:[0, stack_size - 1] (updated_size[i] != 0
+                                       & ALL j:[0, stack_size - 2]
+                                           (j < i -> updated_size[j] = 0))
+         - (if push != stop then 1 else 0);
+
+  I(state_stack[i]) := stop;
+  X(state_stack[i]) := if push != stop & i = 0 then push
+                       else if i + pop < stack_size
+                            then state_stack[i + pop]
+                            else stop;
+
+  updated_size[i] := if i = 0
+                       & cur_val_complete
+                       & (cur_state = read_sub_bits
+                          # cur_state = read_sub_packets)
+                     then cur_val
+                     else if size_stack[i] < 0 then size_stack[i]
+                     else if state_stack[i] = read_sub_bits
+                          then size_stack[i] - 1
+                          else if state_stack[i] = read_sub_packets
+                          then size_stack[i]
+                               - (if packet_finished
+                                     & ALL j:[0, stack_size-1]
+                                         (j < i -> updated_size[j] = 0)
+                                  then 1 else 0)
+                          else -2;
+  I(size_stack[i]) := -2;
+  X(size_stack[i]) := if push != stop & i = 0 then -3
+                      else if i + pop < stack_size
+                           then updated_size[i + pop]
+                           else -2;
+
+  answer_1 := 0, answer_1 + (if cur_val_complete & cur_state = read_version
+                             then cur_val else 0);
+
+  cur_op := -1, if packet_finished then -1
+                else if cur_val_complete & cur_state = read_type then cur_val
+                     else cur_op;
+
+  partial_lit_value := 0, if packet_finished then 0
+                          else if cur_val_complete
+                                  & cur_state = read_lit_middle
+                               then partial_lit_value * 16 + cur_val
+                               else partial_lit_value;
+  lit_value := if cur_val_complete & cur_state = read_lit_end
+               then partial_lit_value * 16 + cur_val
+               else -1;
+
+  I(op_stack[i]) := 4;
+  X(op_stack[i]) := if push != stop & i = 0 then cur_op
+                    else if i + pop < stack_size
+                         then op_stack[i + pop]
+                         else 4;
+
+  new_top_value := if push != stop
+                   then (cur_op
+                        |op_sum => 0
+                        |op_prod => 1
+                        |op_min => max_val
+                        |op_max => 0
+                        |_ => -1)
+                   else -1;
+
+  updated_values[i] := if i = 0
+                       then (if cur_val_complete & cur_state = read_lit_end
+                             then eval(op_stack[0], val_stack[0], lit_value)
+                             else val_stack[0])
+                       else if ALL j:[0, stack_size - 2]
+                                 (j < i -> updated_size[j] = 0)
+                            then eval(op_stack[i],
+                                      val_stack[i],
+                                      updated_values[i-1])
+                            else val_stack[i];
+
+  I(val_stack[i]) := -2;
+  X(val_stack[i]) := if push != stop & i = 0 then new_top_value
+                     else if i + pop < stack_size
+                          then updated_values[i + pop]
+                          else -2;
+
+  eval(op, cur, add)
+    := (op
+       |op_sum => cur + add
+       |op_prod => cur * add
+       |op_min => $min(cur, add)
+       |op_max => $max(cur, add)
+       |op_greater => if cur < 0 then add
+                      else if cur > add then 1 else 0
+       |op_less => if cur < 0 then add
+                   else if cur < add then 1 else 0
+       |op_equal => if cur < 0 then add
+                    else if cur = add then 1 else 0
+       | _ => -1);
+
+  answer_2 := if pop > 0
+                & ALL i:[0, stack_size-1] (i >= pop -> state_stack[i] = stop)
+              then updated_values[pop - 1]
+              else -3;
+
+  cur_stack_size := SUM i:[0, stack_size-1]
+                     (if state_stack[i] != stop then 1 else 0);
+  error := pre(error, false)
+         # (push != stop & state_stack[stack_size - 1] != stop)
+         # SOME i:[0, stack_size-1] (updated_size[i] = -1)
+         # SOME i:[1, stack_size-1] (size_stack[i] = -3)
+         # SOME i:[0, stack_size-1] (i < cur_stack_size & state_stack[i] = stop)
+         # SOME i:[0, stack_size-1] (i < cur_stack_size & val_stack[i] = -2)
+         # SOME i:[0, stack_size-1] (i >= cur_stack_size & val_stack[i] != -2)
+         # SOME i:[0, stack_size-1] (i < cur_stack_size & size_stack[i] = -2)
+         # SOME i:[0, stack_size-1] (i >= cur_stack_size & size_stack[i] != -2);
+
+Outputs:
+  answer_1;
+  answer_2;
+
+Proof Obligations:
+  ~error;
+  cur_state != stop;
