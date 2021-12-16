@@ -1,0 +1,115 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * This is the first puzzle I couldn't finish using the tools I've chosen.
+ * I've tried to find cunning shortcuts but they didn't give the correct
+ * answers, it seems there is no escaping the standard Dijsktra's algorithm.
+ * However even the standard Dijkstra's is too slow and memory-hungery to
+ * work with user-specific-sized data.
+ * I worked to parallelize the algorithm enough to reduce the number of time
+ * steps, and to simplify the formulae enough to fit within acceptable
+ * amount of memory, and I barely got through the first puzzle. I gave up
+ * on the second puzzle which is 25 times larger.
+ */
+
+Constants:
+//  int L := 100;
+//  int N := 500;
+  int N := 10;
+  int max_score := 20*N;
+
+Declarations:
+//  int grid_template[L, L];
+  int grid[N, N];
+  bool visited[N, N];
+  int[0, max_score] local_score[N, N];
+  int ext_score(int, int);
+  bool ext_visited(int, int);
+
+Definitions:
+//  grid[x, y] := 1 + (grid_template[x % L, y % L] - 1 + x/L + y/L) % 9;
+//  grid_template := {
+  grid := {
+    /*
+     * The data set below was imported by filtering AoC input through
+     * sed 's/[0-9]/&, /g;s/^/    { /;s/, $/ },/;$s/,$//'
+     */
+    { 1, 1, 6, 3, 7, 5, 1, 7, 4, 2 },
+    { 1, 3, 8, 1, 3, 7, 3, 6, 7, 2 },
+    { 2, 1, 3, 6, 5, 1, 1, 3, 2, 8 },
+    { 3, 6, 9, 4, 9, 3, 1, 5, 6, 9 },
+    { 7, 4, 6, 3, 4, 1, 7, 1, 1, 1 },
+    { 1, 3, 1, 9, 1, 2, 8, 1, 3, 7 },
+    { 1, 3, 5, 9, 9, 1, 2, 4, 2, 1 },
+    { 3, 1, 2, 5, 4, 2, 1, 6, 3, 9 },
+    { 1, 2, 9, 3, 1, 3, 8, 5, 2, 1 },
+    { 2, 3, 1, 1, 9, 4, 4, 5, 8, 1 }
+  };
+
+
+  score_to_visit := $min x:[0, N-1], y:[0, N-1]
+                      (if visited[x, y] then max_score else local_score[x, y]);
+
+/*
+  visit_index := $min i:[0, N^2-1]
+                   (if ~visited[i % N, i / N]
+                       & local_score[i % N, i / N] = score_to_visit
+                    then i else N^2);
+
+  cur_x := visit_index % N;
+  cur_y := visit_index / N;
+*/
+
+  ext_score(x, y) := if x:[0,N-1] & y:[0,N-1] then local_score[x,y] else max_score;
+  ext_visited(x, y) := x:[0,N-1] & y:[0,N-1] & visited[x, y];
+
+  I(visited[x, y]) := false;
+  X(visited[x, y]) := visited[x, y] // # (x = cur_x & y = cur_y);
+                    # (score_to_visit != max_score
+                       & local_score[x, y] = score_to_visit);
+
+  I(local_score[x, y]) := if x = 0 & y = 0 then 0 else max_score;
+  X(local_score[x, y]) := $min(local_score[x, y],
+                               $min($min(ext_score(x-1, y),
+                                         ext_score(x+1, y)),
+                                    $min(ext_score(x, y-1),
+                                         ext_score(x, y+1))) + grid[x, y]);
+
+/*
+  next_score[x, y] := if visited[x, y] then local_score[x,y]
+                          else if cur_x = x-1
+                          then $min(local_score[x, y],
+                                    local_score[x-1, y] + grid[x, y])
+                          else if cur_x = x+1
+                          then $min(local_score[x, y],
+                                    local_score[x+1, y] + grid[x, y])
+                          else if cur_y = y-1
+                          then $min(local_score[x, y],
+                                    local_score[x, y-1] + grid[x, y])
+                          else if cur_y = y+1
+                          then $min(local_score[x, y],
+                                    local_score[x, y+1] + grid[x, y])
+                          else local_score[x, y];
+*/
+
+  answer_1 := local_score[N-1, N-1];
+
+Outputs:
+  answer_1;
+
+Proof Obligations:
+  ~visited[N-1, N-1];
