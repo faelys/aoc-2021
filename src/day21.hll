@@ -1,0 +1,157 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * The puzzles today seem easy, but the second one is full full of
+ * difficult-to-debug corner cases.
+ *
+ * I implemented the algorithmic steps as an array dimension instead of
+ * HLL time steps, initially to work around the performance issues like
+ * yesterday, but it also provides much more flexibility with inspection of
+ * past states.
+ *
+ * One quirk of HLL is that the current state has to be written in terms of
+ * past states, while the second puzzle is more naturally written as the
+ * contributions to next states from each current state, so an inversion
+ * has to somehow be performed.
+ *
+ * This file is used directly in the why tool, updating `init_pos_1` and
+ * `init_pos_2` with input data and inspecting `answer_1` and `answer_2`.
+ * The POs merely check that there is no bug or incorrect bounds.
+ */
+
+Constants:
+  int init_pos_1 := 4;
+  int init_pos_2 := 8;
+  int max_steps_1 := 500;
+  int max_steps_2 := 1+6*10;
+  int max_score_2 := 21;
+
+Declarations:
+  int score[max_steps_1];
+  int position[max_steps_1];
+  int dice(int);
+  int end_turn;
+
+  int universe_count[10, 10, max_score_2+1, max_score_2+1, max_steps_2];
+  int win1_count[max_steps_2];
+  int win2_count[max_steps_2];
+  int run_count[max_steps_2];
+  int total_count[max_steps_2];
+
+Definitions:
+  dice(i) := i % 100 + 1;
+
+  position[t] := if t = 0 then init_pos_1
+                 elif t = 1 then init_pos_2
+                 else (position[t-2] - 1 + dice(3*(t-2))
+                                         + dice(3*(t-2)+1)
+                                         + dice(3*(t-2)+2)) % 10 + 1;
+
+  score[t] := if t < 2 then 0
+              else score[t-2] + position[t];
+
+  end_turn := $min t:[0, max_steps_1-1]
+                (if score[t] >= 1000 then t else max_steps_1);
+
+  answer_1 := if end_turn < max_steps_1
+              then score[end_turn-1] * 3*(end_turn-1)
+              else 0;
+
+  universe_count[pos_1, pos_2, score_1, score_2, t]
+    := if t = 0
+         then (if pos_1 = init_pos_1-1 & pos_2 = init_pos_2-1
+                  & score_1 = 0 & score_2 = 0
+               then 1 else 0)
+       elif score_1 = max_score_2 & score_2 = max_score_2
+         then 0
+       elif score_1 = max_score_2
+         then universe_count[pos_1, pos_2, score_1, score_2, t-1]
+            + (if (t % 6) = 3
+               then SUM s1:[0, max_score_2-1]
+                      (if s1 + pos_1 + 1 >= max_score_2
+                       then universe_count[(pos_1 + 9) % 10, pos_2,
+                                           s1, score_2, t-1]
+                          + universe_count[(pos_1 + 8) % 10, pos_2,
+                                           s1, score_2, t-1]
+                          + universe_count[(pos_1 + 7) % 10, pos_2,
+                                           s1, score_2, t-1]
+                       else 0)
+               else 0)
+       elif score_2 = max_score_2
+         then universe_count[pos_1, pos_2, score_1, score_2, t-1]
+            + (if (t % 6) = 0
+               then SUM s2:[0, max_score_2-1]
+                      (if s2 + pos_2 + 1 >= max_score_2
+                       then universe_count[pos_1, (pos_2 + 9) % 10,
+                                           score_1, s2, t-1]
+                          + universe_count[pos_1, (pos_2 + 8) % 10,
+                                           score_1, s2, t-1]
+                          + universe_count[pos_1, (pos_2 + 7) % 10,
+                                           score_1, s2, t-1]
+                       else 0)
+               else 0)
+       elif (t % 6):[1,2]
+         then universe_count[(pos_1 + 9) % 10, pos_2, score_1, score_2, t-1]
+            + universe_count[(pos_1 + 8) % 10, pos_2, score_1, score_2, t-1]
+            + universe_count[(pos_1 + 7) % 10, pos_2, score_1, score_2, t-1]
+       elif (t % 6) = 3
+         then (if score_1 < pos_1 + 1 then 0
+               else universe_count[(pos_1 + 9) % 10, pos_2,
+                                   score_1 - (pos_1+1), score_2, t-1]
+                  + universe_count[(pos_1 + 8) % 10, pos_2,
+                                   score_1 - (pos_1+1), score_2, t-1]
+                  + universe_count[(pos_1 + 7) % 10, pos_2,
+                                   score_1 - (pos_1+1), score_2, t-1])
+       elif (t % 6):[4,5]
+         then universe_count[pos_1, (pos_2 + 9) % 10, score_1, score_2, t-1]
+            + universe_count[pos_1, (pos_2 + 8) % 10, score_1, score_2, t-1]
+            + universe_count[pos_1, (pos_2 + 7) % 10, score_1, score_2, t-1]
+       else
+              (if score_2 < pos_2 + 1 then 0
+               else universe_count[pos_1, (pos_2 + 9) % 10,
+                                   score_1, score_2 - (pos_2+1), t-1]
+                  + universe_count[pos_1, (pos_2 + 8) % 10,
+                                   score_1, score_2 - (pos_2+1), t-1]
+                  + universe_count[pos_1, (pos_2 + 7) % 10,
+                                   score_1, score_2 - (pos_2+1), t-1]);
+
+  win1_count[t] := SUM pos_1:[0,9], pos_2:[0, 9], score_2:[0, max_score_2]
+          (universe_count[pos_1, pos_2, max_score_2, score_2, t]);
+  win2_count[t] := SUM pos_1:[0,9], pos_2:[0, 9], score_1:[0, max_score_2-1]
+          (universe_count[pos_1, pos_2, score_1, max_score_2, t]);
+  run_count[t] :=  SUM pos_1:[0,9], pos_2:[0, 9],
+                       score_1:[0, max_score_2-1], score_2:[0, max_score_2-1]
+                     (universe_count[pos_1, pos_2, score_1, score_2, t]);
+  total_count[t] :=  SUM pos_1:[0,9], pos_2:[0, 9],
+                       score_1:[0, max_score_2], score_2:[0, max_score_2]
+                     (universe_count[pos_1, pos_2, score_1, score_2, t]);
+
+  answer_2 := $max(win1_count[max_steps_2-1], win2_count[max_steps_2-1]);
+
+Proof Obligations:
+  /* max_steps_2 is large enough */
+  ALL pos_1:[0,9], pos_2:[0, 9],
+      score_1:[0, max_score_2-1], score_2:[0, max_score_2-1]
+    (universe_count[pos_1, pos_2, score_1, score_2, max_steps_2-1] = 0);
+
+  /* the counts are correct */
+  ALL t:[0, max_steps_2-1]
+    (total_count[t] = run_count[t] + win1_count[t] + win2_count[t]);
+
+  /* running universes triple at each step */
+  ALL t:[1, max_steps_2-1]
+    (total_count[t] = total_count[t-1] + 2*run_count[t-1]);
