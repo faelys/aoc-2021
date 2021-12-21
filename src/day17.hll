@@ -1,0 +1,128 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * I spent a lot of time on these puzzles because of a stupid mistake
+ * when copying the puzzle inputs, with the bad luck of finding the correct
+ * answer for the first puzzle with these erroneous inputs.
+ *
+ * The first puzzle is an optimization problem, most easily solved by hand
+ * using some sort of dichotomy: the number currently at 45 (the answer for
+ * the reference input) is the variable to adjust manually, the PO 1 is
+ * valid when it is an upper bound for the answer, and any counter-example
+ * on PO 1 provides a lower bound for the answer.
+ *
+ * In practice this first puzzle is solve by iteration the following commands:
+ * expand1 -hll day17.hll -lll day17.lll -dumpMap day17.map
+ * s3 -lll day17.lll -cex day17.cex -analyse all join in 1 group -bmc stop 0
+ * cex_simulator -hll day17.hll -cex day17.cex -map day17.map -res day17.res -O
+ * then adjust the guess in PO 1 and starting again.
+ *
+ * The second puzzle brute-forces all possible initial velocities to count
+ * those which are valid, and it is mostly an exercise in deriving the correct
+ * bounds. The answer to this puzzle being static, it can be observed directly
+ * in the why tool with `$out 2`.
+ */
+
+Constants:
+  /* Sizes */
+  int max_time := 200;
+  int max_vel := 200;
+  int max_pos := max_time * max_vel;
+  int max_fall := max_vel + max_time;
+  int max_depth := (2 * max_vel + max_time - 1) * max_time / 2;
+  int i_max := (2 * max_vel + 1) * max_vel;
+  int vi_max := 1848;
+
+  /* Puzzle inputs, hand-copied here */
+  int target_min_x := 20;
+  int target_max_x := 30;
+  int target_min_y := -10;
+  int target_max_y := -5;
+
+Inputs:
+  int[0, max_vel] init_x_velocity;
+  int[-max_vel, max_vel] init_y_velocity;
+
+Declarations:
+  int x_velocity[max_time];
+  int y_velocity[max_time];
+  int x_pos[max_time];
+  int y_pos[max_time];
+  int max_y_pos;
+
+  int gen_x_pos(int, int);
+  int gen_y_pos(int, int);
+
+  int x_vel(int);
+  int y_vel(int);
+  bool valid[i_max];
+  /*
+  int valid_rank[i_max];
+  int valid_i[vi_max];
+  int valid_t[vi_max];
+  int valid_x_vel[vi_max];
+  int valid_y_vel[vi_max];
+  */
+
+Definitions:
+  /* First Puzzle */
+
+  x_velocity[t] := $max(0, init_x_velocity - t);
+  y_velocity[t] := init_y_velocity - t;
+  x_pos[t] := if t = 0 then 0 else x_pos[t-1] + x_velocity[t-1];
+  y_pos[t] := if t = 0 then 0 else y_pos[t-1] + y_velocity[t-1];
+  max_y_pos := $max t:[0, max_time-1] (y_pos[t]);
+
+  /* Second Puzzle */
+
+  gen_x_pos(t, init_x_vel)
+    := (2 * init_x_vel + 1 - $min(t, init_x_vel)) * $min(t, init_x_vel) / 2;
+  gen_y_pos(t, init_y_vel) := (2 * init_y_vel + 1 - t) * t / 2;
+
+  x_vel(i) := (i % max_vel) + 1;
+  y_vel(i) := (i / max_vel) - max_vel;
+  valid[i] := SOME t:[0, max_time-1]
+                (gen_x_pos(t, x_vel(i)):[target_min_x, target_max_x]
+               & gen_y_pos(t, y_vel(i)):[target_min_y, target_max_y]);
+
+  /* Debug Streams:
+  valid_rank[i] := if ~valid[i] then 0
+                   else SUM j:[0, i_max-1] (if j <= i & valid[j] then 1 else 0);
+  valid_i[vi] := SELECT i:[0, i_max-1] (valid_rank[i] = vi + 1);
+  valid_t[vi] := $min t:[0, max_time-1]
+             (if gen_x_pos(t, x_vel(valid_i[vi])):[target_min_x, target_max_x]
+               & gen_y_pos(t, y_vel(valid_i[vi])):[target_min_y, target_max_y]
+              then t
+              else max_time);
+  valid_x_vel[vi] := x_vel(valid_i[vi]);
+  valid_y_vel[vi] := y_vel(valid_i[vi]);
+  */
+
+Outputs:
+  max_y_pos;
+
+  SUM i:[0, i_max-1] (if valid[i] then 1 else 0);
+
+Proof Obligations:
+  /* Optimization PO for the first puzzle */
+  ~(SOME t:[0, max_time-1] (x_pos[t]:[target_min_x, target_max_x]
+                          & y_pos[t]:[target_min_y, target_max_y])
+    & max_y_pos >45);
+
+  /* Check of algebraic shortcuts in gen_?_pos */
+  ALL t:[0, max_time-1] (x_pos[t] = gen_x_pos(t, init_x_velocity)
+                       & y_pos[t] = gen_y_pos(t, init_y_velocity));
