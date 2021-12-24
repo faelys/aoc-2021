@@ -1,0 +1,346 @@
+/*
+ * Copyright (c) 2021, Natacha Porté
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * These puzzles are another good fit for a solver-based language: the
+ * value to find is left as a free input, and implementing the small automaton
+ * is enough to let the solver find valid inputs. It's then just a matter
+ * of optimizing the constants buy using counter-example values until there
+ * no counter-example anymore.
+ *
+ * The optimization process is automated in day24-1-iter.sh and day24-2-iter.sh
+ * which can be called directly without argument.
+ */
+
+Constants:
+  int nof_instructions := 252;
+  int w := -1004;
+  int x := -1003;
+  int y := -1002;
+  int z := -1001;
+
+Types:
+  enum { inp, add, mul, div, mod, eql } opcode;
+  struct { op:opcode, left:int, right:int } instruction;
+
+Inputs:
+  int[1,9] serial[14];
+
+Declarations:
+  instruction instr[nof_instructions];
+  int right_value[nof_instructions];
+  int slot(int);
+  int variables[4, nof_instructions+1];
+  int input_ptr[nof_instructions+1];
+
+Definitions:
+  slot(var) := if var:[w,z] then var-w else 1/0;
+
+  input_ptr[t] := if t = 0 then 0
+                  elif instr[t-1].op = inp then input_ptr[t-1] + 1
+                  else input_ptr[t-1];
+
+  right_value[t] := if instr[t].right:[w,z]
+                    then variables[slot(instr[t].right), t]
+                    else instr[t].right;
+
+  variables[i, t]
+    := if t = 0 then 0
+       elif i != slot(instr[t-1].left) then variables[i, t-1]
+       else (instr[t-1].op
+            |inp => serial[input_ptr[t-1]]
+            |add => variables[i, t-1] + right_value[t-1]
+            |mul => variables[i, t-1] * right_value[t-1]
+            |div => variables[i, t-1] / right_value[t-1]
+            |mod => variables[i, t-1] % right_value[t-1]
+            |eql => if variables[i, t-1] = right_value[t-1] then 1 else 0);
+
+  ms_part := SUM i:[0,6] (serial[i] * 10^(6-i));
+  ls_part := SUM i:[0,6] (serial[i+7] * 10^(6-i));
+
+Outputs:
+  ms_part;
+  ls_part;
+
+Constraints:
+  variables[slot(z), nof_instructions] = 0;
+
+Constants:
+  int ms_part_max := 0;
+  int ls_part_max := 0;
+  int ms_part_min := 9999999;
+  int ls_part_min := 9999999;
+
+Proof Obligations:
+    ms_part < ms_part_max # (ms_part = ms_part_max & ls_part <= ls_part_max);
+    ms_part > ms_part_min # (ms_part = ms_part_min & ls_part >= ls_part_min);
+
+Definitions:
+  instr := {
+    /* sed 's/inp [w-z]/& 0/;s/ /, /g;s/^/    { /;s/$/ },/;$s/,$//' */
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 12 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 9 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 12 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 4 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 12 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 2 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -9 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 5 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -9 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 1 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 14 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 6 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 14 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 11 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -10 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 15 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 15 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 7 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -2 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 12 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 1 },
+    { add, x, 11 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 15 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -15 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 9 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -9 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 12 },
+    { mul, y, x },
+    { add, z, y },
+    { inp, w, 0 },
+    { mul, x, 0 },
+    { add, x, z },
+    { mod, x, 26 },
+    { div, z, 26 },
+    { add, x, -3 },
+    { eql, x, w },
+    { eql, x, 0 },
+    { mul, y, 0 },
+    { add, y, 25 },
+    { mul, y, x },
+    { add, y, 1 },
+    { mul, z, y },
+    { mul, y, 0 },
+    { add, y, w },
+    { add, y, 12 },
+    { mul, y, x },
+    { add, z, y }
+  };
